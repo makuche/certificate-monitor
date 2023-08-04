@@ -22,6 +22,22 @@ from dateutil import relativedelta
 from collections import defaultdict
 
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+
+def log_function_call(function):
+    def wrapper(*args, **kwargs):
+        logging.info(f"Entering {function.__name__}")
+        result = function(*args, **kwargs)
+        logging.info(f"Exiting {function.__name__}")
+        return result
+
+    return wrapper
+
+
+@log_function_call
 def is_git_directory(path="."):
     """
     Check if the provided path is a git repository.
@@ -46,6 +62,7 @@ def is_git_directory(path="."):
         raise FileNotFoundError("Git is not found on this system.")
 
 
+@log_function_call
 def find_repo_older(path=os.path.abspath(os.getcwd())):
     """
     Find the directory with all the content from the 7.7 policies
@@ -92,6 +109,7 @@ def find_repo(version="", path=os.path.abspath(os.getcwd())):
     return ""
 
 
+@log_function_call
 def find_versions(path=os.path.abspath(os.getcwd())):
     """
     Find all versions in the provided path.
@@ -115,6 +133,7 @@ def find_versions(path=os.path.abspath(os.getcwd())):
     return versions
 
 
+@log_function_call
 def parse_cert(cert_file):
     """
     Parse a certificate file and extract information.
@@ -151,6 +170,7 @@ def parse_cert(cert_file):
         raise
 
 
+@log_function_call
 def delete_files_in_folder(folder_path):
     """
     Delete all files in a directory.
@@ -169,6 +189,7 @@ def delete_files_in_folder(folder_path):
             shutil.rmtree(file_object_path)
 
 
+@log_function_call
 def delete_folder(folder_path):
     """
     Delete a directory.
@@ -180,6 +201,7 @@ def delete_folder(folder_path):
         shutil.rmtree(folder_path)
 
 
+@log_function_call
 def create_pem_file(content, path, file_name="cert_file.pem"):
     """
     Creates a PEM file with a given content.
@@ -198,6 +220,7 @@ def create_pem_file(content, path, file_name="cert_file.pem"):
         f.write("-----END CERTIFICATE-----")
 
 
+@log_function_call
 def get_all_folder_paths(git_conf_path):
     """
     Returns a dictionary with all the given paths. The returned object is a
@@ -231,6 +254,7 @@ def get_all_folder_paths(git_conf_path):
         return {}
 
 
+@log_function_call
 def unzip(file_path, store_path):
     """
     Unzips a file to a given path.
@@ -246,6 +270,7 @@ def unzip(file_path, store_path):
         print(f"Invalid file or path: {file_path}")
 
 
+@log_function_call
 def xml_path_for_Cert(folder_path):
     """
     Returns the path to the CertStore.xml file for a given path to an environment file.
@@ -269,6 +294,7 @@ def xml_path_for_Cert(folder_path):
         return None
 
 
+@log_function_call
 def is_within_three_months(end_date):
     """
     Checks if a given date is within 3 months from the current date.
@@ -285,6 +311,7 @@ def is_within_three_months(end_date):
     return delta.years == 0 and delta.months <= 2 and delta.days >= 0
 
 
+@log_function_call
 def parse_xml_for_certs(xml_file_path, temp_folder):
     """
     Returns all the content from a Certificate contained in a given
@@ -324,6 +351,7 @@ def parse_xml_for_certs(xml_file_path, temp_folder):
     return container
 
 
+@log_function_call
 def path_builder(root, policy, sub_policy, env_file):
     """
     Constructs a directory path from the provided components.
@@ -340,6 +368,7 @@ def path_builder(root, policy, sub_policy, env_file):
     return os.path.join(root, policy, sub_policy, env_file)
 
 
+@log_function_call
 def month_converter(month):
     """
     Converts the number of a month to the matching name in German.
@@ -368,6 +397,7 @@ def month_converter(month):
     return months.get(month, "Invalid month")
 
 
+@log_function_call
 def database_updater(Policy, environment_content, database="database_certs.json"):
     """
     Stores all the certificates, for which a JIRA ticket was created, such that
@@ -399,6 +429,7 @@ def database_updater(Policy, environment_content, database="database_certs.json"
         json.dump(data_all, f, indent=4)
 
 
+@log_function_call
 def create_JIRA_tickets(
     Policy,
     environment_content,
@@ -441,6 +472,7 @@ def create_JIRA_tickets(
         send_curl(data_path=new_filename)
 
 
+@log_function_call
 def modify_json(Policy, month, given, filename="data_JIRA.json"):
     """
     Modifies the default Json file to add the certificates for a given
@@ -477,6 +509,7 @@ def modify_json(Policy, month, given, filename="data_JIRA.json"):
     return new_filename
 
 
+@log_function_call
 def send_curl(data_path="data_JIRA.json"):
     """
     Send a curl to the Jira rest API with a given Json file.
@@ -501,6 +534,7 @@ def send_curl(data_path="data_JIRA.json"):
     subprocess.run(command, check=True)
 
 
+@log_function_call
 def delete_file_in_directory(directory, file_name):
     """
     Deletes a specific file within a provided directory.
@@ -511,6 +545,7 @@ def delete_file_in_directory(directory, file_name):
         os.unlink(directory_path)
 
 
+@log_function_call
 def create_output_file(local_git_path, output_file="output.txt", zones=set()):
     """
     Writes certificate contents from a local git path to an output file.
@@ -564,6 +599,7 @@ def create_output_file(local_git_path, output_file="output.txt", zones=set()):
                 holder = holder[:-1]
 
 
+@log_function_call
 def send_file(mail_to, file="output_folder/output.txt"):
     """
     Sends an email with a specific file attached to a given email address.
@@ -574,6 +610,7 @@ def send_file(mail_to, file="output_folder/output.txt"):
     )
 
 
+@log_function_call
 def read_config(file="configurations.ini", path=None):
     """
     Loads configurations from a given .ini file in a specified path.
@@ -585,6 +622,7 @@ def read_config(file="configurations.ini", path=None):
     return config
 
 
+@log_function_call
 def main():
     """
     The main execution function that sets up necessary variables,
