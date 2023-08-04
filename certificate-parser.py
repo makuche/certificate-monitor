@@ -22,74 +22,145 @@ from dateutil import relativedelta
 from collections import defaultdict
 
 
-def is_git_directory(path = '.'):
+def is_git_directory(path="."):
     """
-    Returns True if the current directory is a GIT Repository and False otherwise.
+    Check if the provided path is a git repository.
+
+    Args:
+    path (str): The path to the directory to check.
+    Defaults to the current directory '.'.
+
+    Returns:
+    bool: True if the directory is a git repository, False otherwise.
     """
-    return subprocess.call(['git', '-C', path, 'status'], stderr=subprocess.STDOUT, stdout = open(os.devnull, 'w')) == 0
+    try:
+        return (
+            subprocess.call(
+                ["git", "-C", path, "status"],
+                stderr=subprocess.STDOUT,
+                stdout=open(os.devnull, "w"),
+            )
+            == 0
+        )
+    except FileNotFoundError:
+        raise FileNotFoundError("Git is not found on this system.")
 
 
-def find_repo_older(path = os.path.abspath(os.getcwd())):
+def find_repo_older(path=os.path.abspath(os.getcwd())):
     """
-    Returns the path to the folder with all the content from the 7.7 policies.
+    Find the directory with all the content from the 7.7 policies
+    in the provided path.
+
+    Args:
+    path (str): The path to the directory to check. Defaults to the current
+    working directory.
+
+    Returns:
+    str: The path to the directory with all the content from the 7.7 policies.
+    Returns an empty string if no such directory is found.
     """
     for pathy in os.listdir(path):
-        cur = path + '/' + pathy
-        if is_git_directory(cur) and 'Configurations_7.7' in os.listdir(cur):
-            return cur + '/' + 'Configurations_7.7'
-    return ''
+        cur = os.path.join(path, pathy)
+        if is_git_directory(cur) and "Configurations_7.7" in os.listdir(cur):
+            return os.path.join(cur, "Configurations_7.7")
+    return ""
 
 
-def find_repo(version = '',path = os.path.abspath(os.getcwd())):
+def find_repo(version="", path=os.path.abspath(os.getcwd())):
     """
-    Returns the path to the folder with all the content from the 7.7 policies.
+    Find the directory with all the content from the provided version policies
+    in the given path.
+
+    Args:
+    version (str): The version of the policies. If not provided, the maximum
+    version is used. Defaults to an empty string.
+    path (str): The path to the directory to check. Defaults to the current
+    working directory.
+
+    Returns:
+    str: The path to the directory with all the content from the specified
+    version policies. Returns an empty string if no such directory is found.
     """
     for pathy in os.listdir(path):
-        cur = path + '/' + pathy
+        cur = os.path.join(path, pathy)
         if is_git_directory(cur):
+            content_list = os.listdir(cur)
             if not version:
-                version =max([x for x in os.walk(cur)][0][1])
-            if version in os.listdir(cur):
-                return cur + '/' + version +'/' + 'policies'
-    return ''
+                version = max(x for x in content_list)
+            if version in content_list:
+                return os.path.join(cur, version, "policies")
+    return ""
 
 
-def find_versions(path = os.path.abspath(os.getcwd())):
+def find_versions(path=os.path.abspath(os.getcwd())):
+    """
+    Find all versions in the provided path.
+
+    Args:
+    path (str): The path to the directory to check. Defaults to the current
+    working directory.
+
+    Returns:
+    list: A list of all version strings found in the directory, sorted in
+    descending order.
+    """
     versions = []
     for pathy in os.listdir(path):
-        cur = path + '/' + pathy
+        cur = os.path.join(path, pathy)
         if is_git_directory(cur):
-            for x in os.listdir(cur):
-            # for root,dirs, files in os.walk(cur):
-            #     print(root,dirs,files)
-            #     for dir in dirs:
-            #         print(dir)
-                if os.path.isdir(cur+'/'+x) and not 'git' in x:
-                    versions.append(x)
+            for sub_dir in os.listdir(cur):
+                if os.path.isdir(os.path.join(cur, sub_dir)) and "git" not in sub_dir:
+                    versions.append(sub_dir)
     versions.sort(reverse=True)
     return versions
 
 
 def parse_cert(cert_file):
     """
-    Returns the extracted information from the pem file. Currently it extracts the certificate creation date and the run out date as well as the issuer and serial number.
+    Parse a certificate file and extract information.
+
+    Args:
+    cert_file (str): The path to the certificate file.
+
+    Returns:
+    list: A list containing the certificate creation date, the run out date,
+    the issuer, and the serial number.
     """
-    with open(cert_file, 'rb+') as f:
-        cert_pem = f.read()
-        f.close()
-        x509 = load_certificate(FILETYPE_PEM, cert_pem)
-        date_format, encoding, encod = "%Y%m%d%H%M%SZ", "ascii", 'utf-8'
-        not_before = datetime.strptime(x509.get_notBefore().decode(encoding), date_format)+ timedelta(hours=1)
-        not_after = datetime.strptime(x509.get_notAfter().decode(encoding), date_format)+ timedelta(hours=1)
-        issuer = ', '.join([x[0].decode(encod)+'='+x[1].decode(encod) for x in x509.get_subject().get_components()])
-        serial_number = hex(x509.get_serial_number())[2:].upper()
-        return [not_before,not_after,issuer,serial_number]
+    try:
+        with open(cert_file, "rb") as f:
+            cert_pem = f.read()
+            x509 = load_certificate(FILETYPE_PEM, cert_pem)
+            date_format = "%Y%m%d%H%M%SZ"
+            encoding = "ascii"
+            encod = "utf-8"
+            not_before = datetime.strptime(
+                x509.get_notBefore().decode(encoding), date_format
+            ) + timedelta(hours=1)
+            not_after = datetime.strptime(
+                x509.get_notAfter().decode(encoding), date_format
+            ) + timedelta(hours=1)
+            issuer = ", ".join(
+                [
+                    x[0].decode(encod) + "=" + x[1].decode(encod)
+                    for x in x509.get_subject().get_components()
+                ]
+            )
+            serial_number = hex(x509.get_serial_number())[2:].upper()
+            return [not_before, not_after, issuer, serial_number]
+    except (FileNotFoundError, ValueError):
+        raise
 
 
 def delete_files_in_folder(folder_path):
     """
-    Deletes all the files in a folder for given path.
+    Delete all files in a directory.
+
+    Args:
+    folder_path (str): The path to the directory.
     """
+    if not os.path.isdir(folder_path):
+        raise ValueError(f"{folder_path} is not a directory.")
+
     for file_object in os.listdir(folder_path):
         file_object_path = os.path.join(folder_path, file_object)
         if os.path.isfile(file_object_path) or os.path.islink(file_object_path):
@@ -100,318 +171,448 @@ def delete_files_in_folder(folder_path):
 
 def delete_folder(folder_path):
     """
-    Deletes a folder for a given path.
+    Delete a directory.
+
+    Args:
+    folder_path (str): The path to the directory.
     """
     if os.path.exists(folder_path):
         shutil.rmtree(folder_path)
 
 
-def create_pem_file(content,path,file_name='cert_file.pem'):
+def create_pem_file(content, path, file_name="cert_file.pem"):
     """
-    Creates a pem file with a given content.
+    Creates a PEM file with a given content.
+
+    Parameters:
+    content (str): The string content to be written into the PEM file.
+    path (str): The directory path where the PEM file will be created.
+    file_name (str, optional): The name of the PEM file.
+    Default is 'cert_file.pem'.
     """
-    with open(path + '/' + file_name, 'w') as f:
-        f.write('-----BEGIN CERTIFICATE-----')
-        f.write('\n')
-        content = content.replace('\n','')
-        content = content.replace('\r','')
-        f.write(content)
-        f.write('\n')
-        f.write('-----END CERTIFICATE-----')
+    full_path = os.path.join(path, file_name)
+    content = content.replace("\n", "").replace("\r", "")
+    with open(full_path, "w") as f:
+        f.write("-----BEGIN CERTIFICATE-----\n")
+        f.write(content + "\n")
+        f.write("-----END CERTIFICATE-----")
 
 
 def get_all_folder_paths(git_conf_path):
     """
-    Returns a dictionary with all the given paths. The returned object is a dictionary with the policies as keys cntaining a dictionary with subpolicies as keys containing a list with all the environments.
+    Returns a dictionary with all the given paths. The returned object is a
+    dictionary with the policies as keys containing a dictionary with
+    subpolicies as keys containing a list with all the environments.
+
+    Parameters:
+    git_conf_path (str): The root directory to start looking for policies
+    and environments.
+
+    Returns:
+    dict: A dictionary with nested structure representing the policy,
+    subpolicy and environment relationships.
     """
-    return { x:{y:[file for file in os.listdir(git_conf_path+'/'+x+'/'+y) if file.endswith('.env')] for y in os.listdir(git_conf_path +'/'+x)} for x in os.listdir(git_conf_path) if not x.startswith('API-')}
+    if os.path.isdir(git_conf_path):
+        return {
+            policy: {
+                sub_policy: [
+                    file
+                    for file in os.listdir(
+                        os.path.join(git_conf_path, policy, sub_policy)
+                    )
+                    if file.endswith(".env")
+                ]
+                for sub_policy in os.listdir(os.path.join(git_conf_path, policy))
+            }
+            for policy in os.listdir(git_conf_path)
+            if not policy.startswith("API-")
+        }
+    else:
+        return {}
 
 
-def unzip(file_path,store_path):
+def unzip(file_path, store_path):
     """
-    Unzip a folder for a given path.
+    Unzips a file to a given path.
+
+    Parameters:
+    file_path (str): The path of the zip file to be unzipped.
+    store_path (str): The directory path where the unzipped files will be stored.
     """
-    with zipfile.ZipFile(file_path, 'r') as zip_ref:
-        zip_ref.extractall(store_path)
+    if os.path.isfile(file_path) and zipfile.is_zipfile(file_path):
+        with zipfile.ZipFile(file_path, "r") as zip_ref:
+            zip_ref.extractall(store_path)
+    else:
+        print(f"Invalid file or path: {file_path}")
 
 
 def xml_path_for_Cert(folder_path):
     """
     Returns the path to the CertStore.xml file for a given path to an environment file.
+
+    Parameters:
+    folder_path (str): The path to the directory containing the CertStore.xml file.
+
+    Returns:
+    str: The full path of the CertStore.xml file.
     """
-    return os.path.join(folder_path, [x for x in os.listdir(folder_path) if not x.startswith('META')][0], [x for x in os.listdir(os.path.join(folder_path, [x for x in os.listdir(folder_path) if not x.startswith('META')][0]))if x.startswith('Cert') and x.endswith('.xml') ][0])
+    try:
+        sub_folder = [x for x in os.listdir(folder_path) if not x.startswith("META")][0]
+        cert_file = [
+            x
+            for x in os.listdir(os.path.join(folder_path, sub_folder))
+            if x.startswith("Cert") and x.endswith(".xml")
+        ][0]
+        return os.path.join(folder_path, sub_folder, cert_file)
+    except (IndexError, FileNotFoundError) as e:
+        print(f"Error: {e}")
+        return None
 
 
-def less_than_month(end_date):
+def is_within_three_months(end_date):
     """
-    Returns True if the date lies within 3 months from now else False.
+    Checks if a given date is within 3 months from the current date.
+
+    Parameters:
+    end_date (datetime): The end date to be checked.
+
+    Returns:
+    bool: True if the date is within 3 months from now, False otherwise.
     """
-    today = datetime.strptime(str(date.today()), "%Y-%m-%d")
+    today = date.today()
     end_date = end_date.date()
     delta = relativedelta.relativedelta(end_date, today)
-    return delta.years==0 and delta.months<=2 and delta.days>=0
+    return delta.years == 0 and delta.months <= 2 and delta.days >= 0
 
 
-def parse_xml_for_certs(xml_file_path,temp_folder):
+def parse_xml_for_certs(xml_file_path, temp_folder):
     """
-    Returns all the content (see in parse_cert) from a Certificate contained in a given CertStore.xml file (given by path). Stores information for extraction in temp_folder.
+    Returns all the content from a Certificate contained in a given
+    CertStore.xml file.
+
+    Parameters:
+    xml_file_path (str): The path to the CertStore.xml file.
+    temp_folder (str): The temporary directory where PEM files will be created.
+
+    Returns:
+    list: A list containing the not_before, not_after, issuer, and
+    serial_number information for each certificate.
     """
     container = []
-    file = minidom.parse(xml_file_path)
-    models = file.getElementsByTagName('entity')
-    for m in models:
-        if m.attributes['type'].value =='Certificate':
-            for i in range(len(m.childNodes)):
-                try:
-                    if m.childNodes[i].attributes['name'].value =='content':
-                        content = m.childNodes[i].childNodes[0].firstChild.nodeValue
-                        create_pem_file(content,temp_folder)
-                        not_before,not_after,issuer,serial_number=parse_cert(temp_folder + '/' + 'cert_file.pem')
-                        if less_than_month(not_after):
-                            container.append([not_before,not_after,issuer,serial_number])
-                        break
-                except:
-                    continue
+    if os.path.isfile(xml_file_path):
+        file = minidom.parse(xml_file_path)
+        models = file.getElementsByTagName("entity")
+        for m in models:
+            if m.attributes["type"].value == "Certificate":
+                for i in range(len(m.childNodes)):
+                    try:
+                        if m.childNodes[i].attributes["name"].value == "content":
+                            content = m.childNodes[i].childNodes[0].firstChild.nodeValue
+                            create_pem_file(content, temp_folder)
+                            not_before, not_after, issuer, serial_number = parse_cert(
+                                os.path.join(temp_folder, "cert_file.pem")
+                            )
+                            if is_within_three_months(not_after):
+                                container.append(
+                                    [not_before, not_after, issuer, serial_number]
+                                )
+                            break
+                    except:
+                        continue
+    else:
+        print(f"Invalid file: {xml_file_path}")
     return container
 
 
-def path_builder(root,policy,sub_policy,env_file):
+def path_builder(root, policy, sub_policy, env_file):
     """
-    Returns the path to a file for given folders that contain the file and the file name.
+    Constructs a directory path from the provided components.
+
+    Parameters:
+    root (str): The root directory.
+    policy (str): The policy directory.
+    sub_policy (str): The subpolicy directory.
+    env_file (str): The environment file.
+
+    Returns:
+    str: The constructed path string.
     """
-    return root+'/'+policy+'/'+sub_policy+'/'+env_file
+    return os.path.join(root, policy, sub_policy, env_file)
 
 
 def month_converter(month):
     """
-    Converts the number of a month to the matching name.
+    Converts the number of a month to the matching name in German.
+
+    Parameters:
+    month (int): The month number from 1 (January) to 12 (December).
+
+    Returns:
+    str: The month name in German, or 'Invalid month' if the
+    month number is out of range.
     """
-    months = [
-    (1, 'Januar'),
-    (2, 'Februar'),
-    (3, 'Maerz'),
-    (4, 'April'),
-    (5, 'Mai'),
-    (6, 'Juni'),
-    (7, 'Juli'),
-    (8, 'August'),
-    (9, 'September'),
-    (10, 'Oktober'),
-    (11, 'November'),
-    (12, 'Dezember'),
-    ]
-    return months[month-1][1]
+    months = {
+        1: "Januar",
+        2: "Februar",
+        3: "März",
+        4: "April",
+        5: "Mai",
+        6: "Juni",
+        7: "Juli",
+        8: "August",
+        9: "September",
+        10: "Oktober",
+        11: "November",
+        12: "Dezember",
+    }
+    return months.get(month, "Invalid month")
 
 
-def database_updater(Policy,environment_content,database='database_certs.json'):
+def database_updater(Policy, environment_content, database="database_certs.json"):
     """
-    Stores all the certificates, for which a JIRA ticket was created, such that no double tickets will be generated.
+    Stores all the certificates, for which a JIRA ticket was created, such that
+    no double tickets will be generated.
+
+    Parameters:
+    Policy (str): The policy for the certificate.
+    environment_content (dict): A dictionary containing the certificate details.
+    database (str, optional): The path to the JSON file where the certificates
+    data are stored. Default is 'database_certs.json'.
     """
-    with open(database, 'r') as f:
-        data_all = json.load(f)
-        if Policy in data_all:
-            data = data_all[Policy]
-        else: data = {}
-        for env in environment_content:
-            for cert in environment_content[env]:
-                not_before,not_after,issuer,serial_number = cert
-                month = month_converter(int(not_after.month))
-                year = not_after.year
-                date = month + '/' + str(year)
-                if not date in data:
-                    data[date]={env:[serial_number]}
-                else:
-                    if not env in data[date]:
-                        data[date][env]=[serial_number]
-                    elif serial_number not in data[date][env]:
-                        data[date][env].append(serial_number)
-        if data:
-            data_all[Policy] = data
-    os.remove(database)
-    with open(database, 'w') as f:
+    try:
+        with open(database, "r") as f:
+            data_all = json.load(f)
+    except FileNotFoundError:
+        data_all = {}
+
+    data = data_all.get(Policy, {})
+    for env, certs in environment_content.items():
+        for cert in certs:
+            not_before, not_after, issuer, serial_number = cert
+            month = month_converter(int(not_after.month))
+            year = not_after.year
+            date = f"{month}/{year}"
+            data.setdefault(date, {}).setdefault(env, []).append(serial_number)
+
+    data_all[Policy] = data
+    with open(database, "w") as f:
         json.dump(data_all, f, indent=4)
-    return
 
 
-def create_JIRA_tickets(Policy,environment_content,database='database_certs.json',filename='data_JIRA.json'):
+def create_JIRA_tickets(
+    Policy,
+    environment_content,
+    database="database_certs.json",
+    filename="data_JIRA.json",
+):
     """
-    Takes all the certificates from one Policy and splits them up based on the month they run out. Then it calls the Json modifier function and then the send curl function.
+    Takes all the certificates from one Policy and splits them up based on the
+    month they run out. Then it calls the Json modifier function and then
+    the send curl function.
+
+    Parameters:
+    Policy (str): The policy for the certificate.
+    environment_content (dict): A dictionary containing the certificate details.
+    database (str, optional): The path to the JSON file where the
+    certificates data are stored. Default is 'database_certs.json'.
+    filename (str, optional): The name of the JSON file to be created.
+    Default is 'data_JIRA.json'.
     """
-    with open(database, 'r') as f:
+    with open(database, "r") as f:
         data = json.load(f)
-        months_cert = defaultdict(lambda: defaultdict(list))
-        for env in environment_content:
-            for cert in environment_content[env]:
-                not_before,not_after,issuer,serial_number = cert
-                month = not_after.month
-                year = not_after.year
-                date = month_converter(int(not_after.month)) + '/' + str(year)
-                if Policy not in data or date not in data[Policy] or env not in data[Policy][date] or serial_number not in data[Policy][date][env]:
-                    months_cert[month][env].append([not_after,serial_number,issuer])
-    for month in months_cert:
-        new_filename = modifiy_json(Policy,month,months_cert[month])
+
+    months_cert = defaultdict(lambda: defaultdict(list))
+    for env, certs in environment_content.items():
+        for cert in certs:
+            not_before, not_after, issuer, serial_number = cert
+            month = not_after.month
+            year = not_after.year
+            date = f"{month_converter(month)}/{year}"
+            if (
+                Policy not in data
+                or date not in data[Policy]
+                or env not in data[Policy][date]
+                or serial_number not in data[Policy][date][env]
+            ):
+                months_cert[month][env].append([not_after, serial_number, issuer])
+
+    for month, env_certs in months_cert.items():
+        new_filename = modify_json(Policy, month, env_certs, filename)
         send_curl(data_path=new_filename)
-    return
 
 
-def modifiy_json(Policy,month,given,filename='data_JIRA.json'):
+def modify_json(Policy, month, given, filename="data_JIRA.json"):
     """
-    Modifies the default Json file to add the certificates for a given month to the Summary and description.
+    Modifies the default Json file to add the certificates for a given
+    month to the Summary and description.
+
+    Parameters:
+    Policy (str): The policy for the certificate.
+    month (int): The expiry month of the certificate.
+    given (dict): A dictionary containing the certificate details.
+    filename (str, optional): The name of the JSON file to be created.
+    Default is 'data_JIRA.json'.
+
+    Returns:
+    str: The path of the new JSON file.
     """
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         data = json.load(f)
-        data['fields']['summary']+=Policy+' - '+month_converter(month)
-        data['fields']['description']+=Policy+':\n\n'
-        for env in given:
-            data['fields']['description']+=env+'\t:\n'
-            for cert in given[env]:
-                not_after,serial_number,issuer = cert
-                data['fields']['description']+='\t\t * '+'EndDate: '+str(not_after)+'\tSerialID: '+str(serial_number)+'\tIssuer: '+issuer+'\n'
-    new_filename = 'data_JIRA_altered.json'
+
+    data["fields"]["summary"] += f"{Policy} - {month_converter(month)}"
+    data["fields"]["description"] += f"{Policy}:\n\n"
+    for env, certs in given.items():
+        data["fields"]["description"] += f"{env}\t:\n"
+        for not_after, serial_number, issuer in certs:
+            data["fields"][
+                "description"
+            ] += f"\t\t * EndDate: {not_after}\tSerialID: {serial_number}\tIssuer: {issuer}\n"
+
+    new_filename = "data_JIRA_altered.json"
     if os.path.exists(new_filename):
         os.remove(new_filename)
-    with open(new_filename, 'w') as f:
+    with open(new_filename, "w") as f:
         json.dump(data, f, indent=4)
+
     return new_filename
 
 
-def send_curl(data_path='data_JIRA.json'):
+def send_curl(data_path="data_JIRA.json"):
     """
     Send a curl to the Jira rest API with a given Json file.
+
+    Parameters:
+    data_path (str, optional): The path to the JSON file containing the data
+    to be sent. Default is 'data_JIRA.json'.
     """
-    command = f'curl \
-        -D- \
-        -u <ID>:<PW> \
-        -X POST  \
-        --data @{data_path} \
-        -H "Content-Type: application/json" \
-        https://jira.ucc/rest/api/2/issue/'
-    os.system(command)
+    command = [
+        "curl",
+        "-D-",
+        "-u",
+        "<ID>:<PW>",
+        "-X",
+        "POST",
+        "--data",
+        f"@{data_path}",
+        "-H",
+        "Content-Type: application/json",
+        "https://jira.ucc/rest/api/2/issue/",
+    ]
+    subprocess.run(command, check=True)
 
 
-def create_output_file_old(local_git_path,output_file = 'output.txt'):
+def delete_file_in_directory(directory, file_name):
     """
-    Stores all the content from the Certificates in a text file.
+    Deletes a specific file within a provided directory.
+    Creates the directory if it does not already exist.
     """
-    temp_folder= 'tempy_folder'
-    output_folder = 'output_folder'
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    elif os.path.exists(output_folder + '/' + output_file):
-        os.unlink(output_folder + '/' + output_file)
+    directory_path = os.path.join(directory, file_name)
+    if os.path.exists(directory_path):
+        os.unlink(directory_path)
+
+
+def create_output_file(local_git_path, output_file="output.txt", zones=set()):
+    """
+    Writes certificate contents from a local git path to an output file.
+    If an entry in the git path is already in zones, it is skipped.
+    """
+    temp_folder = "tempy_folder"
+    output_folder = "output_folder"
     entries = get_all_folder_paths(local_git_path)
-    with open(output_folder + '/' + output_file, 'w') as f:
+    output_file_path = os.path.join(output_folder, output_file)
+
+    with open(output_file_path, "a") as f:
         holder = []
         for entry in entries:
-            holder.append(entry + ':\n')
-            for ent in entries[entry]:
-                holder.append('\t'+ent+':\n')
-                environment_content = {}
-                for e in entries[entry][ent]:
-                    holder.append('\t\t'+e+':\n')
-                    path = path_builder(local_git_path,entry,ent,e)
-                    delete_folder(temp_folder)
-                    unzip(path,temp_folder)
-                    xml_path = xml_path_for_Cert(temp_folder)
-                    container = parse_xml_for_certs(xml_path,temp_folder)
-                    Policy, Environment = e.split('.')[0].split('_')
-                    environment_content[Environment]=container
-                    if container:
-                        f.write(''.join(holder))
-                       holder = []
-                    else:
-                        holder=holder[:-1]
-                    for cont in container:
-                        f.write('\t\t\t'+'EndDate: '+str(cont[1])+'\tSerialID: '+str(cont[3])+'\tIssuer: '+cont[2]+'\n')
-                create_JIRA_tickets(Policy,environment_content)
-                database_updater(Policy,environment_content)
-                if holder and holder[-1]=='\t'+ent+':\n':
-                    holder=holder[:-1]
-            if holder and holder[-1]==entry + ':\n':
-                holder=holder[:-1]
-
-
-def delete_output_file(output_file = 'output.txt'):
-    output_folder = 'output_folder'
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    elif os.path.exists(output_folder + '/' + output_file):
-        os.unlink(output_folder + '/' + output_file)
-    print('Output file deleted')
-
-
-def create_output_file(local_git_path,output_file = 'output.txt'):
-    """
-    Stores all the content from the Certificates in a text file.
-    """
-    global zones
-    temp_folder= 'tempy_folder'
-    output_folder = 'output_folder'
-    entries = get_all_folder_paths(local_git_path)
-    with open(output_folder + '/' + output_file, 'a') as f:
-        holder = []
-       for entry in entries:
-            if entry in zones: continue
-            holder.append(entry + ':\n')
+            if entry in zones:
+                continue
+            holder.append(entry + ":\n")
             zones.add(entry)
             for ent in entries[entry]:
-                holder.append('\t'+ent+':\n')
+                holder.append("\t" + ent + ":\n")
                 environment_content = {}
                 for e in entries[entry][ent]:
-                    holder.append('\t\t'+e+':\n')
-                    path = path_builder(local_git_path,entry,ent,e)
+                    holder.append("\t\t" + e + ":\n")
+                    path = path_builder(local_git_path, entry, ent, e)
                     delete_folder(temp_folder)
-                    unzip(path,temp_folder)
+                    unzip(path, temp_folder)
                     xml_path = xml_path_for_Cert(temp_folder)
-                    container = parse_xml_for_certs(xml_path,temp_folder)
-                    Policy, Environment = e.split('.')[0].split('_')
-                    environment_content[Environment]=container
+                    container = parse_xml_for_certs(xml_path, temp_folder)
+                    Policy, Environment = e.split(".")[0].split("_")
+                    environment_content[Environment] = container
                     if container:
-                        f.write(''.join(holder))
+                        f.write("".join(holder))
                         holder = []
                     else:
-                        holder=holder[:-1]
+                        holder = holder[:-1]
                     for cont in container:
-                        f.write('\t\t\t'+'EndDate: '+str(cont[1])+'\tSerialID: '+str(cont[3])+'\tIssuer: '+cont[2]+'\n')
-                create_JIRA_tickets(Policy,environment_content)
-                database_updater(Policy,environment_content)
-                if holder and holder[-1]=='\t'+ent+':\n':
-                    holder=holder[:-1]
-            if holder and holder[-1]==entry + ':\n':
-                holder=holder[:-1]
+                        f.write(
+                            "\t\t\t"
+                            + "EndDate: "
+                            + str(cont[1])
+                            + "\tSerialID: "
+                            + str(cont[3])
+                            + "\tIssuer: "
+                            + cont[2]
+                            + "\n"
+                        )
+                create_JIRA_tickets(Policy, environment_content)
+                database_updater(Policy, environment_content)
+                if holder and holder[-1] == "\t" + ent + ":\n":
+                    holder = holder[:-1]
+            if holder and holder[-1] == entry + ":\n":
+                holder = holder[:-1]
 
 
-def send_file(mail_to,file = "output_folder/output.txt"):
+def send_file(mail_to, file="output_folder/output.txt"):
     """
-    Send an email to a given mail address and a given text file.
+    Sends an email with a specific file attached to a given email address.
     """
-    os.system(f'mutt -s "Certificates that need updating" {mail_to} < {file}')
+    subprocess.run(
+        ["mutt", "-s", "Certificates that need updating", mail_to, "<", file],
+        check=True,
+    )
 
 
-def read_config(file = 'configurations.ini',path = os.path.abspath(os.getcwd())):
+def read_config(file="configurations.ini", path=None):
     """
-    Load the configurations needed to run the code
+    Loads configurations from a given .ini file in a specified path.
+    If no path is provided, it defaults to the current working directory.
     """
-    if path.split('/')[-1]=='Utils':
-        path = '/'.join(path.split('/')[:-1])
+    path = path or os.getcwd()
     config = configparser.ConfigParser()
-    config.read(path+'/'+file)
+    config.read(os.path.join(path, file))
     return config
 
 
-"""
-Variables that need to be set
-"""
-config = read_config()
-mail_to = config['Settings']['email']
-version = config['Settings']['version']
-versions = find_versions()
-"""
-Run
-"""
-delete_output_file()
-zones = set([])
-while versions:
-    version = versions.pop(0)
-    create_output_file(find_repo(version=version))
-send_file(mail_to)
+def main():
+    """
+    The main execution function that sets up necessary variables,
+    deletes the output file, creates a new output file with certificate information
+    and sends the output file to a specified email address.
+    """
+    # Load configurations
+    config = read_config()
+
+    # Extract necessary variables from config
+    mail_to = config["Settings"]["email"]
+    version = config["Settings"]["version"]
+
+    # Find all versions
+    versions = find_versions()
+
+    # Delete previous output file
+    delete_file_in_directory()
+
+    # Initialize zones set
+    zones = set([])
+
+    # Loop through versions, create an output file for each, and send it via email
+    while versions:
+        version = versions.pop(0)
+        create_output_file(find_repo(version=version), zones=zones)
+    send_file(mail_to)
+
+
+if __name__ == "__main__":
+    main()
