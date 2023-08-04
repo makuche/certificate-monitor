@@ -149,6 +149,10 @@ def parse_cert(cert_file):
         with open(cert_file, "rb") as f:
             cert_pem = f.read()
             x509 = load_certificate(FILETYPE_PEM, cert_pem)
+            import pdb
+
+            pdb.set_trace()
+            exit()
             date_format = "%Y%m%d%H%M%SZ"
             encoding = "ascii"
             encod = "utf-8"
