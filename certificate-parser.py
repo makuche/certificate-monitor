@@ -466,10 +466,10 @@ def create_JIRA_tickets(
                 or serial_number not in data[Policy][date][env]
             ):
                 months_cert[month][env].append([not_after, serial_number, issuer])
-
-    for month, env_certs in months_cert.items():
-        new_filename = modify_json(Policy, month, env_certs, filename)
-        send_curl(data_path=new_filename)
+    print(months_cert)
+    # for month, env_certs in months_cert.items():
+    #     new_filename = modify_json(Policy, month, env_certs, filename)
+    #     send_curl(data_path=new_filename)
 
 
 @log_function_call
@@ -649,7 +649,7 @@ def main():
     while versions:
         version = versions.pop(0)
         create_output_file(find_repo(version=version), zones=zones)
-    send_file(mail_to)
+    # send_file(mail_to)
 
 
 if __name__ == "__main__":
