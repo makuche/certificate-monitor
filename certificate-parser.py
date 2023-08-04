@@ -640,7 +640,11 @@ def main():
     versions = find_versions()
 
     # Delete previous output file
-    delete_file_in_directory()
+    current_dir = os.getcwd()
+    output_folder = "output_folder"
+    absolute_dir = os.path.join(current_dir, output_folder)
+    file_name = "output.txt"
+    delete_file_in_directory(absolute_dir, file_name)
 
     # Initialize zones set
     zones = set([])
